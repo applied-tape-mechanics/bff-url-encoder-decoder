@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BFF: URL Percent-Encoder & Decoder</title>
+  
+  <!-- Shared Applied Tape Mechanics Design System (Loaded at runtime from GitHub Release via jsDelivr CDN) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/applied-tape-mechanics/bff-ui@v1.0.0/css/bff-theme.css">
+  <style>
+    .mode-tab-accent {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #c7d2fe;
+    }
+    .mode-tab-accent:hover {
+      background: rgba(99, 102, 241, 0.25);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="badge-bar">
+        <span class="pulse-dot"></span>
+        <span>Dual Brainfuck Engines (url_encode & url_decode)</span>
+      </div>
+      <h1>URL Percent-Encoder & Decoder</h1>
+      <p class="subtitle">RFC 3986 percent-encoding & decoding powered by Brainfuck state machines</p>
+    </header>
+
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tabEncode" onclick="setMode('encode')">
+        Encode Mode (Plain &rarr; %URL)
+      </button>
+      <button class="mode-tab" id="tabDecode" onclick="setMode('decode')">
+        Decode Mode (%URL &rarr; Plain)
+      </button>
+      <button class="mode-tab mode-tab-accent" onclick="openBfModal()">
+        &lt;/&gt; Inspect Brainfuck Code
+      </button>
+    </div>
+
+    <div class="grid">
+      <!-- Input Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title" id="inputTitle">Plain Text Input</div>
+          <span id="inputFormatBadge" style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">Direction: Encode</span>
+        </div>
+        <div class="presets" id="presetsContainer"></div>
+        <textarea id="inputText" placeholder="Type or paste text to convert..." oninput="process()"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="process()">
+            Run Brainfuck Engine
+          </button>
+          <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+          <button class="btn btn-secondary" onclick="swapContent()" style="margin-left:auto;">
+            &#x21C5; Swap &amp; Invert
+          </button>
+        </div>
+      </div>
+
+      <!-- Output Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title" id="outputTitle">Encoded %URL Output</div>
+          <button class="preset-btn" onclick="copyOutput()">Copy Result</button>
+        </div>
+        <pre class="output-view" id="outputText">/* Output will appear here */</pre>
+        <div class="stats-bar">
+          <div class="stat-pill">Escaped: <span id="statEscaped">0</span></div>
+          <div class="stat-pill">Chars: <span id="statChars">0</span></div>
+          <div class="stat-pill">Status: <span id="statStatus" style="color:var(--text-muted);">Idle</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shared Applied Tape Mechanics Runtime & UI Kit (Loaded at runtime from GitHub Release via jsDelivr CDN) -->
+  <script src="https://cdn.jsdelivr.net/gh/applied-tape-mechanics/bff-interpreter@v1.0.0/bff-interpreter.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/applied-tape-mechanics/bff-ui@v1.0.0/js/bff-ui.js"></script>
+  <script>
+    const BF_ENCODE = __BF_ENCODE__;
+    const BF_DECODE = __BF_DECODE__;
+    let currentMode = 'encode';
+    let lastRawOutput = '';
+    let bfData = null;
+
+    const encodePresets = [
+      { name: "Search Query", data: "https://example.com/search?q=hello world&lang=en" },
+      { name: "JSON in URL", data: '{"user":"Alice","role":"Admin","active":true}' },
+      { name: "Special Characters", data: "price=$100 & fee=5% / total=105#" },
+      { name: "Unreserved Safe", data: "Alpha_123-Beta.Test~v1" }
+    ];
+
+    const decodePresets = [
+      { name: "Search Query", data: "https%3A%2F%2Fexample.com%2Fsearch%3Fq%3Dhello%20world%26lang%3Den" },
+      { name: "JSON in URL", data: "%7B%22user%22%3A%22Alice%22%2C%22role%22%3A%22Admin%22%2C%22active%22%3Atrue%7D" },
+      { name: "Form Encoded", data: "name=John+Doe&city=New+York" }
+    ];
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById('tabEncode').className = mode === 'encode' ? 'mode-tab active' : 'mode-tab';
+      document.getElementById('tabDecode').className = mode === 'decode' ? 'mode-tab active' : 'mode-tab';
+
+      if (mode === 'encode') {
+        document.getElementById('inputTitle').innerText = 'Plain Text Input';
+        document.getElementById('outputTitle').innerText = 'Encoded %URL Output';
+        document.getElementById('inputFormatBadge').innerText = 'Direction: Encode';
+      } else {
+        document.getElementById('inputTitle').innerText = '%URL Encoded Input';
+        document.getElementById('outputTitle').innerText = 'Decoded Plain Text';
+        document.getElementById('inputFormatBadge').innerText = 'Direction: Decode';
+      }
+      renderPresets();
+      loadPreset(0);
+    }
+
+    function renderPresets() {
+      const container = document.getElementById('presetsContainer');
+      container.innerHTML = '<span style="font-size:0.75rem; color:var(--text-muted); align-self:center;">Presets:</span>';
+      const presets = currentMode === 'encode' ? encodePresets : decodePresets;
+      presets.forEach((p, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'preset-btn';
+        btn.innerText = p.name;
+        btn.onclick = () => loadPreset(idx);
+        container.appendChild(btn);
+      });
+    }
+
+    function loadPreset(idx) {
+      const presets = currentMode === 'encode' ? encodePresets : decodePresets;
+      if (presets[idx]) {
+        document.getElementById('inputText').value = presets[idx].data;
+        process();
+      }
+    }
+
+    function clearAll() {
+      document.getElementById('inputText').value = '';
+      document.getElementById('outputText').innerText = '/* Output will appear here */';
+      document.getElementById('statEscaped').innerText = '0';
+      document.getElementById('statChars').innerText = '0';
+      document.getElementById('statStatus').innerText = 'Idle';
+      document.getElementById('statStatus').style.color = 'var(--text-muted)';
+      lastRawOutput = '';
+    }
+
+    function swapContent() {
+      if (!lastRawOutput) return;
+      const newMode = currentMode === 'encode' ? 'decode' : 'encode';
+      const prevOutput = lastRawOutput;
+      setMode(newMode);
+      document.getElementById('inputText').value = prevOutput;
+      process();
+    }
+
+    async function process() {
+      const input = document.getElementById('inputText').value;
+      if (!input) { clearAll(); return; }
+
+      const statusEl = document.getElementById('statStatus');
+      statusEl.innerText = 'Processing (Brainfuck)...';
+      statusEl.style.color = 'var(--cyan)';
+
+      const endpoint = currentMode === 'encode' ? '/encode' : '/decode';
+
+      // If backend API is detected, try FastAPI endpoint
+      if (BffUI.api.detected) {
+        try {
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: input
+          });
+
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.detail || 'Processing failed');
+          }
+
+          const data = await response.json();
+          lastRawOutput = data.result;
+
+          document.getElementById('outputText').innerText = data.result;
+          document.getElementById('statEscaped').innerText = data.escaped_count || 0;
+          document.getElementById('statChars').innerText = data.result.length;
+          statusEl.innerText = 'Success (API)';
+          statusEl.style.color = 'var(--success)';
+          return;
+        } catch (err) {
+          console.warn('Backend API request failed, executing via client JS VM:', err);
+        }
+      }
+
+      // Standalone client-side Brainfuck execution (pure JS VM)
+      try {
+        const bfCode = currentMode === 'encode' ? BF_ENCODE : BF_DECODE;
+        const result = BffUI.runBrainfuck(bfCode, input);
+        lastRawOutput = result;
+
+        document.getElementById('outputText').innerText = result;
+        const escaped = (result.match(/%[0-9A-Fa-f]{2}/g) || []).length;
+        document.getElementById('statEscaped').innerText = escaped;
+        document.getElementById('statChars').innerText = result.length;
+        statusEl.innerText = 'Success (Client JS VM)';
+        statusEl.style.color = 'var(--success)';
+      } catch (err) {
+        document.getElementById('outputText').innerText = 'Error: ' + err.message;
+        statusEl.innerText = 'Failed';
+        statusEl.style.color = 'var(--danger)';
+      }
+    }
+
+    function copyOutput() {
+      const text = document.getElementById('outputText').innerText;
+      if (window.BffUI) {
+        BffUI.copyToClipboard(text, 'URL result');
+      } else {
+        navigator.clipboard.writeText(text).then(() => alert('Output copied to clipboard!'));
+      }
+    }
+
+    async function openBfModal() {
+      let code = currentMode === 'decode' ? BF_DECODE : BF_ENCODE;
+      const title = currentMode === 'decode' ? 'URL Percent-Decoder (url_decode.bf)' : 'URL Percent-Encoder (url_encode.bf)';
+
+      if (window.BffUI && BffUI.api && BffUI.api.detected) {
+        try {
+          if (!bfData) {
+            const res = await fetch('/bf');
+            if (res.ok) bfData = await res.json();
+          }
+          const activeKey = currentMode === 'decode' ? 'url_decode' : 'url_encode';
+          if (bfData && bfData[activeKey] && bfData[activeKey].code) {
+            code = bfData[activeKey].code;
+          }
+        } catch (e) {
+          // Fall back to inlined BF_ENCODE / BF_DECODE constants
+        }
+      }
+
+      const desc = `Brainfuck State Machine (${code.length.toLocaleString()} instructions)`;
+      if (window.BffUI) {
+        BffUI.showBfModal(title, code, desc);
+      } else {
+        alert(`${title}: ${code.length} instructions`);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      setMode('encode');
+    });
+  </script>
+</body>
+</html>

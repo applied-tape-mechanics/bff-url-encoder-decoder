@@ -1,0 +1,27 @@
+{
+  "name": "bff-url-encoder-decoder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bidirectional URL percent-encoder/decoder implemented as pure Brainfuck state machines, served by Fastify",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "dev": "node --watch src/server.ts",
+    "test": "node --test",
+    "typecheck": "tsc --noEmit",
+    "compile:bf": "node src/compiler.ts"
+  },
+  "dependencies": {
+    "bff-interpreter": "github:applied-tape-mechanics/bff-interpreter#v1.0.0",
+    "@fastify/swagger": "^9.9.2",
+    "@fastify/swagger-ui": "^6.1.2",
+    "fastify": "^5.12.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.0"
+  }
+}
