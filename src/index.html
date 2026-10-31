@@ -169,8 +169,8 @@
 
       const endpoint = currentMode === 'encode' ? '/encode' : '/decode';
 
-      // If backend API is detected, try FastAPI endpoint
-      if (BffUI.api.detected) {
+      // If backend API is detected, try Fastify endpoint
+      if (window.BffUI && BffUI.api && BffUI.api.detected) {
         try {
           const response = await fetch(endpoint, {
             method: 'POST',
